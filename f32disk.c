@@ -25,9 +25,7 @@ static char *diskpath;
 static char shell_cmd[255] = {0};
 static int shell_error = 0;
 static int disk_formatted = 0;
-static int disk_mounted = 0;
 static char pwd[255] = "/";
-static char path[255] = "";
 
 
 int disk_mount(char *diskpath, int u) {
@@ -124,7 +122,7 @@ int disk_format() {
 
 int mkdir(char *folder) {
     
-    sprintf(shell_cmd, "mkdir %s%s%s", DISK_DIR, pwd, folder);
+    sprintf(shell_cmd, "mkdir %s%s/%s", DISK_DIR, pwd, folder);
     //puts(shell_cmd);
     if(shell_error = system(shell_cmd))
         printf("error = %d\n", shell_error);
@@ -136,7 +134,7 @@ int mkdir(char *folder) {
 
 int mkfile(char *file) {
 
-    sprintf(shell_cmd, "touch %s%s%s", DISK_DIR, pwd, file);
+    sprintf(shell_cmd, "touch %s%s/%s", DISK_DIR, pwd, file);
     //puts(shell_cmd);
     if(shell_error = system(shell_cmd))
         printf("error = %d\n", shell_error);
@@ -158,21 +156,32 @@ int dir() {
     return 0;
 }
 
-int ch_dir() {
+int ch_dir(char *path) {
     
+    sprintf(shell_cmd, "cd %s%s", DISK_DIR, path);
+    //printf("path = %s\n", path);
+    //printf("path length = %lu\n", strlen(path));
+    if(shell_error = system(shell_cmd))
+        printf("error = %d\n", shell_error);
+    if (shell_error)
+        return 1;
+    else {
+        memset(pwd, 0, strlen(pwd));
+        strncpy(pwd, path, strlen(path)-1);
+        //puts(shell_cmd);
+        //puts(pwd);
+    }
     return 0;
 }
 
 int shell_input() {
-    char input_buf[255] = {0};
-    char *pwd = "/";
+    char input_buf[255];
     char *cmd;
     char *param;
-    char *ptr;
     
     printf("\nWelcome back, user!\n\n");
     while(1) {
-        printf("user@localhost:%s>", pwd);
+        fprintf(stdout, "%s>", pwd);
         fgets(input_buf, sizeof(input_buf), stdin);
         cmd = strtok(input_buf, " ");
         param = strtok(NULL, " ");
@@ -205,8 +214,12 @@ int shell_input() {
             continue;
         }
         if(!strncmp(cmd, "cd", 2)) {
-            puts("cd");
-            ch_dir();
+            if(param != NULL){
+                if(ch_dir(param))
+                    puts("No such directory");
+            }
+            else
+                puts("You must specify a path");
             continue;
         }
         if(!strncmp(cmd, "mkdir", 5)) {
