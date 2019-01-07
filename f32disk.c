@@ -18,25 +18,70 @@
 #include <unistd.h>
 #include <errno.h>
 #define DISK_SIZE 0x1400000
+#define DISK_DIR ".disk"
 
-int fd = -1;
-char *diskpath;
+static int fd = -1;
+static char *diskpath;
+static char shell_cmd[255] = {0};
+static int shell_error = 0;
+static int disk_formatted = 0;
+static int disk_mounted = 0;
+static char pwd[255] = "/";
+static char path[255] = "";
 
+
+int disk_mount(char *diskpath, int u) {
+    
+    if (u){
+        sprintf(shell_cmd, "mkdir %s", DISK_DIR);
+        //puts(shell_cmd);
+        if(shell_error = system(shell_cmd)) {
+            printf("error = %d\n", shell_error);
+            if (shell_error != 256)
+                return 1;
+        }
+        sprintf(shell_cmd, "mount -t vfat -o loop %s %s", diskpath, DISK_DIR);
+        //puts(shell_cmd);
+        if(shell_error = system(shell_cmd))
+            printf("error = %d\n", shell_error);
+        if (shell_error)
+            return 1;
+    }
+    else {
+        sprintf(shell_cmd, "umount %s", DISK_DIR);
+        //puts(shell_cmd);
+        if(shell_error = system(shell_cmd))
+            printf("error = %d\n", shell_error);
+        if (shell_error)
+            return 1;
+        sprintf(shell_cmd, "rmdir %s", DISK_DIR);
+        //puts(shell_cmd);
+        if(shell_error = system(shell_cmd)){
+            printf("error = %d\n", shell_error);
+            return 1;
+        }
+    }
+            
+    return 0;
+}
 
 int disk_open(char *diskpath) {
     
     fd = open(diskpath, O_CREAT|O_EXCL|O_SYNC|O_RDWR, S_IRUSR|S_IWUSR);
     if (fd == -1){
         if (errno == EEXIST) {
-            //puts("Disk file exists!");
+            if(!disk_mount(diskpath, 1)) {
+                disk_formatted = 1;
+            }
         }
         else {
-            puts("Disk file cannot be opened");
             return 1;
         }
     }
     else {
-        ftruncate(fd, DISK_SIZE);
+        if(ftruncate(fd, DISK_SIZE) == -1) {
+            return 1;
+        }
     }
     close(fd);
     return 0;
@@ -44,20 +89,71 @@ int disk_open(char *diskpath) {
 
 int disk_format() {
     
-    return 0;
-}
-
-int mkdir() {
+    char answer[255];
+    
+    if(disk_formatted) {
+        puts("All data will be lost. Are you sure? (yes/no)");
+        fgets(answer, sizeof(answer), stdin);
+        //printf("answer = %s\n", answer);
+        if(!strncmp(answer, "yes", 3)) {
+            puts("Formatting disk...");
+            if (!disk_mount(diskpath, 0)){
+                disk_formatted = 0;
+            }
+            else
+                return 1;
+        }
+        else
+            return 0;
+    } 
+    if(!disk_formatted) {
+        sprintf(shell_cmd, "mkfs -t vfat %s", diskpath);
+        //puts(shell_cmd);
+        if(shell_error = system(shell_cmd))
+            printf("error = %d\n", shell_error);
+        if (shell_error)
+            return 1;
+        if(!disk_mount(diskpath, 1)) 
+            disk_formatted = 1;
+        else
+            return 1;
+    }
     
     return 0;
 }
 
-int mkfile() {
+int mkdir(char *folder) {
+    
+    sprintf(shell_cmd, "mkdir %s%s%s", DISK_DIR, pwd, folder);
+    //puts(shell_cmd);
+    if(shell_error = system(shell_cmd))
+        printf("error = %d\n", shell_error);
+    if (shell_error)
+        return 1;
+
+    return 0;
+}
+
+int mkfile(char *file) {
+
+    sprintf(shell_cmd, "touch %s%s%s", DISK_DIR, pwd, file);
+    //puts(shell_cmd);
+    if(shell_error = system(shell_cmd))
+        printf("error = %d\n", shell_error);
+    if (shell_error)
+        return 1;
     
     return 0;
 }
 
 int dir() {
+
+    sprintf(shell_cmd, "ls -1a %s%s", DISK_DIR, pwd);
+    //puts(shell_cmd);
+    if(shell_error = system(shell_cmd))
+        printf("error = %d\n", shell_error);
+    if (shell_error)
+        return 1;
     
     return 0;
 }
@@ -67,7 +163,7 @@ int ch_dir() {
     return 0;
 }
 
-void shell_input() {
+int shell_input() {
     char input_buf[255] = {0};
     char *pwd = "/";
     char *cmd;
@@ -81,16 +177,30 @@ void shell_input() {
         cmd = strtok(input_buf, " ");
         param = strtok(NULL, " ");
         if (strtok(NULL, " ") != NULL)
-            puts("More than one parameter specified, others will be omitted");
+            printf("More than one parameter for command \"%s\" specified, others will be omitted\n", cmd);
         //puts(cmd);
         //puts(param);
-        if(!strncmp(input_buf, "format", 6)) {
+        if(!strncmp(cmd, "format", 6)) {
             puts("format");
             if(disk_format())
-                puts("Disk cannot be formatted");
+                puts("Disk cannot be formatted. Are you root?");
+            else
+                puts("Ok");
+            continue;
+        }
+        if(!strncmp(cmd, "exit", 4)) {
+            if(disk_formatted) {
+                if(disk_mount(diskpath, 0))
+                    return 1;
+            }
+            puts("Program exiting...");
+            break;
+        }
+        if(!disk_formatted) {
+            puts("Unknown disk format");
+            continue;
         }
         if(!strncmp(cmd, "ls", 2)) {
-            puts("ls");
             dir();
             continue;
         }
@@ -100,23 +210,31 @@ void shell_input() {
             continue;
         }
         if(!strncmp(cmd, "mkdir", 5)) {
-            puts("mkdir");
-            if(mkdir())
-                puts("Directory cannot be created");
+            if(param != NULL){
+                if(mkdir(param))
+                    puts("Folder cannot be created");
+                else
+                    puts("Ok");
+            }
+            else
+                puts("You must specify folder name");
             continue;
         }
         if(!strncmp(cmd, "touch", 5)) {
-            puts("touch");
-            if(mkfile())
-                puts("File cannot be created");
+            if(param != NULL){
+                if(mkfile(param))
+                    puts("File cannot be created");
+                else
+                    puts("Ok");
+            }
+            else
+                puts("You must specify file name");
             continue;
-        }
-        if(!strncmp(cmd, "exit", 4)) {
-            puts("Program exiting...");
-            break;
         }
         puts("Unknown command");
     }
+    
+    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -129,10 +247,13 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    if(disk_open(diskpath))
+    if(disk_open(diskpath)) {
+        puts("Disk file cannot be opened. Are you root?");
         return 1;
+    }
     
-    shell_input();
+    if(shell_input())
+        return 1;
 
     return 0;
 }
