@@ -43,7 +43,6 @@ int disk_mount(char *diskpath, int u) {
         }
         else
             if(error = mkdir(DISK_DIR, 0744)) {
-                printf("error = %d\n", error);
                 return 1;
             }
 
@@ -54,11 +53,9 @@ int disk_mount(char *diskpath, int u) {
     else {
         sprintf(fparam, "umount %s", DISK_DIR);
         if(error = system(fparam)) {
-            printf("error = %d\n", error);
             return 1;
         }
         if(error = rmdir(DISK_DIR)){
-            printf("error = %d\n", error);
             return 1;
         }
     }
