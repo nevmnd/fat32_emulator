@@ -1,7 +1,7 @@
 f32disk
 ========
 
-A FAT32 disk emulation test task wit DOS commands support
+A FAT32 disk emulation test task with DOS commands support
 
 ## Build & Run
 
